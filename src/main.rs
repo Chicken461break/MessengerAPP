@@ -368,46 +368,50 @@ impl MessengerApp {
     }
     
     fn send_message(&mut self, chat_id: &str, content: &str) {
-        let signal = SignalMessage {
-            message_type: "send_message".to_string(),
-            chat_id: Some(chat_id.to_string()),
-            sender_id: self.current_user.as_ref().map(|u| u.id.clone()),
-            message_id: Some(uuid::Uuid::new_v4().to_string()),
-            payload: Some(serde_json::json!({
-                "type": "text",
-                "content": content,
-            })),
-            jwt: None,
-            ts: Some(chrono::Utc::now().timestamp()),
-        };
-        
-        let network = self.network.clone();
-        self.runtime.spawn(async move {
-            let _ = network.send_signal(signal).await;
-        });
-        
-        // Clear input
-        self.message_input.remove(chat_id);
+        if let Some(current_user) = &self.current_user {
+            let signal = SignalMessage {
+                message_type: "send_message".to_string(),
+                chat_id: Some(chat_id.to_string()),
+                sender_id: Some(current_user.id.clone()),
+                message_id: Some(uuid::Uuid::new_v4().to_string()),
+                payload: Some(serde_json::json!({
+                    "type": "text",
+                    "content": content,
+                })),
+                jwt: None,
+                ts: Some(chrono::Utc::now().timestamp()),
+            };
+            
+            let network = self.network.clone();
+            self.runtime.spawn(async move {
+                let _ = network.send_signal(signal).await;
+            });
+            
+            // Clear input
+            self.message_input.remove(chat_id);
+        }
     }
     
     fn send_media_message(&mut self, chat_id: &str, media_url: &str) {
-        let signal = SignalMessage {
-            message_type: "send_message".to_string(),
-            chat_id: Some(chat_id.to_string()),
-            sender_id: self.current_user.as_ref().map(|u| u.id.clone()),
-            message_id: Some(uuid::Uuid::new_v4().to_string()),
-            payload: Some(serde_json::json!({
-                "type": "image",
-                "media_url": media_url,
-            })),
-            jwt: None,
-            ts: Some(chrono::Utc::now().timestamp()),
-        };
-        
-        let network = self.network.clone();
-        self.runtime.spawn(async move {
-            let _ = network.send_signal(signal).await;
-        });
+        if let Some(current_user) = &self.current_user {
+            let signal = SignalMessage {
+                message_type: "send_message".to_string(),
+                chat_id: Some(chat_id.to_string()),
+                sender_id: Some(current_user.id.clone()),
+                message_id: Some(uuid::Uuid::new_v4().to_string()),
+                payload: Some(serde_json::json!({
+                    "type": "image",
+                    "media_url": media_url,
+                })),
+                jwt: None,
+                ts: Some(chrono::Utc::now().timestamp()),
+            };
+            
+            let network = self.network.clone();
+            self.runtime.spawn(async move {
+                let _ = network.send_signal(signal).await;
+            });
+        }
     }
     
     fn attempt_reconnect(&mut self) {
@@ -464,44 +468,31 @@ impl MessengerApp {
 }
 
 impl eframe::App for MessengerApp {
-fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-    // Process events
-    self.process_events();
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Process events
+        self.process_events();
 
-    // Apply theme
-    ctx.set_visuals(match self.settings.theme {
-        Theme::Light => egui::Visuals::light(),
-        Theme::Dark => egui::Visuals::dark(),
-        Theme::System => egui::Visuals::dark(),
-    });
+        // Apply custom styling
+        self.apply_custom_style(ctx);
 
-    // Show appropriate view
-    match &self.current_view {
-        AppView::Auth => {
-            // Create a temporary UI for auth
-            egui::CentralPanel::default().show(ctx, |ui| {
-                // You'll need to implement this or use your auth UI
-                ui.label("Authentication would go here");
-                if ui.button("Login").clicked() {
-                    // Temporary login for testing
-                    self.current_view = AppView::ChatList;
-                }
-            });
+        // Show appropriate view based on authentication state
+        match &self.current_view {
+            AppView::Auth => {
+                // Use the auth UI module
+                ui::auth::show_auth_ui(self, ctx);
+            }
+            _ => {
+                // Use the main UI layout module
+                ui::main::show_main_layout(self, ctx);
+            }
         }
-        _ => {
-            // Create a temporary UI for main layout
-            egui::CentralPanel::default().show(ctx, |ui| {
-                ui::main::show_main_layout(self, ui);
-            });
-        }
+
+        // Show toasts
+        self.toasts.show(ctx);
+
+        // Request repaint for animations
+        ctx.request_repaint();
     }
-
-    // Show toasts
-    self.toasts.show(ctx);
-
-    // Request repaint for animations
-    ctx.request_repaint();
-}
 }
 
 impl MessengerApp {
