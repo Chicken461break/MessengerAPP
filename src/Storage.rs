@@ -18,7 +18,6 @@ impl StorageManager {
         let conn = Connection::open(&db_path)
             .context("Failed to open database")?;
 
-        // Enable WAL mode for better concurrent access
         conn.execute("PRAGMA journal_mode=WAL", [])?;
         conn.execute("PRAGMA foreign_keys=ON", [])?;
 
@@ -88,9 +87,9 @@ impl StorageManager {
         Ok(())
     }
 
-    // ========================================================================
+    // ----------------------------------
     // SESSION MANAGEMENT
-    // ========================================================================
+    
 
     pub async fn save_session(&mut self, token: &str, user: &User) -> Result<()> {
         self.conn.execute(
@@ -141,9 +140,9 @@ impl StorageManager {
         Ok(())
     }
 
-    // ========================================================================
+    // --------------
     // SETTINGS
-    // ========================================================================
+   
 
     pub async fn save_settings(&mut self, settings: &AppSettings) -> Result<()> {
         let json = serde_json::to_string(settings)?;
@@ -164,9 +163,9 @@ impl StorageManager {
         Ok(serde_json::from_str(&json)?)
     }
 
-    // ========================================================================
+    // --------------------
     // CACHE MANAGEMENT
-    // ========================================================================
+    
 
     pub async fn cache_chat(&mut self, chat: &Chat) -> Result<()> {
         let json = serde_json::to_string(chat)?;
@@ -260,4 +259,5 @@ impl StorageManager {
 
         Ok(deleted)
     }
+
 }
