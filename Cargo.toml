@@ -3,18 +3,19 @@ name = "private-messenger-client"
 version = "1.0.0"
 edition = "2024"
 
+
 [[bin]]
 name = "messenger_client"
 path = "src/main.rs"
 
 [dependencies]
-# gui
+# GUI
 eframe = "0.28"
 egui = "0.28"
 egui_extras = { version = "0.28", features = ["all_loaders"] }
 egui-notify = "0.15"
 
-# networking
+# Networking
 tokio = { version = "1.40", features = ["full"] }
 tokio-tungstenite = { version = "0.23", features = ["native-tls"] }
 futures-util = "0.3"
