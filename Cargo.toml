@@ -3,6 +3,11 @@ name = "private-messenger-client"
 version = "1.0.0"
 edition = "2024"
 
+[lib]
+name = "rust_core"
+crate-type = ["cdylib"]
+
+
 
 [[bin]]
 name = "messenger_client"
