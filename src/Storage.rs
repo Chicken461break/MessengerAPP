@@ -90,7 +90,6 @@ impl StorageManager {
     // ----------------------------------
     // SESSION MANAGEMENT
     
-
     pub async fn save_session(&mut self, token: &str, user: &User) -> Result<()> {
         self.conn.execute(
             "INSERT OR REPLACE INTO session (key, user_id, username, display_name, token, created_at) 
@@ -143,7 +142,6 @@ impl StorageManager {
     // --------------
     // SETTINGS
    
-
     pub async fn save_settings(&mut self, settings: &AppSettings) -> Result<()> {
         let json = serde_json::to_string(settings)?;
         self.conn.execute(
@@ -153,20 +151,29 @@ impl StorageManager {
         Ok(())
     }
 
-    pub async fn load_settings(&self) -> Result<AppSettings> {
-        let json: String = self.conn.query_row(
+    pub async fn load_settings(&self) -> Result<Option<AppSettings>> {
+        let result = self.conn.query_row(
             "SELECT value FROM settings WHERE key = 'app_settings'",
             [],
-            |row| row.get(0),
-        )?;
+            |row| {
+                let json: String = row.get(0)?;
+                Ok(json)
+            },
+        );
 
-        Ok(serde_json::from_str(&json)?)
+        match result {
+            Ok(json) => {
+                let settings: AppSettings = serde_json::from_str(&json)?;
+                Ok(Some(settings))
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
     }
 
     // --------------------
     // CACHE MANAGEMENT
     
-
     pub async fn cache_chat(&mut self, chat: &Chat) -> Result<()> {
         let json = serde_json::to_string(chat)?;
         self.conn.execute(
@@ -176,18 +183,54 @@ impl StorageManager {
         Ok(())
     }
 
+    pub async fn load_cached_chat(&self, chat_id: &str) -> Result<Option<Chat>> {
+        let result = self.conn.query_row(
+            "SELECT data FROM chats_cache WHERE id = ?",
+            params![chat_id],
+            |row| {
+                let json: String = row.get(0)?;
+                Ok(json)
+            },
+        );
+
+        match result {
+            Ok(json) => {
+                let chat: Chat = serde_json::from_str(&json)?;
+                Ok(Some(chat))
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
     pub async fn load_cached_chats(&self) -> Result<Vec<Chat>> {
         let mut stmt = self.conn.prepare(
             "SELECT data FROM chats_cache ORDER BY updated_at DESC"
         )?;
 
-        let chats = stmt.query_map([], |row| {
+        let chat_results: Vec<Result<Chat, anyhow::Error>> = stmt.query_map([], |row| {
             let json: String = row.get(0)?;
             Ok(json)
         })?
-        .filter_map(|r| r.ok())
-        .filter_map(|json| serde_json::from_str(&json).ok())
+        .map(|r| {
+            let json = r?;
+            let chat: Chat = serde_json::from_str(&json)
+                .context("Failed to deserialize chat")?;
+            Ok(chat)
+        })
         .collect();
+
+        // Separate errors from successful results
+        let mut chats = Vec::new();
+        for result in chat_results {
+            match result {
+                Ok(chat) => chats.push(chat),
+                Err(e) => {
+                    // Log the error but continue processing other chats
+                    eprintln!("Warning: Failed to load cached chat: {}", e);
+                }
+            }
+        }
 
         Ok(chats)
     }
@@ -206,21 +249,86 @@ impl StorageManager {
             "SELECT data FROM messages_cache WHERE chat_id = ? ORDER BY timestamp DESC LIMIT ?"
         )?;
 
-        let messages = stmt.query_map(params![chat_id, limit], |row| {
+        let message_results: Vec<Result<Message, anyhow::Error>> = stmt.query_map(
+            params![chat_id, limit], 
+            |row| {
+                let json: String = row.get(0)?;
+                Ok(json)
+            }
+        )?
+        .map(|r| {
+            let json = r?;
+            let message: Message = serde_json::from_str(&json)
+                .context("Failed to deserialize message")?;
+            Ok(message)
+        })
+        .collect();
+
+        // Separate errors from successful results
+        let mut messages = Vec::new();
+        for result in message_results {
+            match result {
+                Ok(message) => messages.push(message),
+                Err(e) => {
+                    eprintln!("Warning: Failed to load cached message: {}", e);
+                }
+            }
+        }
+
+        // Reverse to get chronological order
+        messages.reverse();
+        Ok(messages)
+    }
+
+    pub async fn cache_contact(&mut self, contact: &Contact) -> Result<()> {
+        let json = serde_json::to_string(contact)?;
+        self.conn.execute(
+            "INSERT OR REPLACE INTO contacts_cache (id, data, updated_at) VALUES (?, ?, ?)",
+            params![contact.id, json, chrono::Utc::now().timestamp()],
+        )?;
+        Ok(())
+    }
+
+    pub async fn load_cached_contacts(&self) -> Result<Vec<Contact>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT data FROM contacts_cache ORDER BY updated_at DESC"
+        )?;
+
+        let contact_results: Vec<Result<Contact, anyhow::Error>> = stmt.query_map([], |row| {
             let json: String = row.get(0)?;
             Ok(json)
         })?
-        .filter_map(|r| r.ok())
-        .filter_map(|json| serde_json::from_str(&json).ok())
+        .map(|r| {
+            let json = r?;
+            let contact: Contact = serde_json::from_str(&json)
+                .context("Failed to deserialize contact")?;
+            Ok(contact)
+        })
         .collect();
 
-        Ok(messages)
+        let mut contacts = Vec::new();
+        for result in contact_results {
+            match result {
+                Ok(contact) => contacts.push(contact),
+                Err(e) => {
+                    eprintln!("Warning: Failed to load cached contact: {}", e);
+                }
+            }
+        }
+
+        Ok(contacts)
     }
 
     pub async fn cache_file(&mut self, media_url: &str, local_path: &str, mime_type: Option<&str>, size: Option<u64>) -> Result<()> {
         self.conn.execute(
             "INSERT OR REPLACE INTO file_cache (media_url, local_path, mime_type, size, downloaded_at) VALUES (?, ?, ?, ?, ?)",
-            params![media_url, local_path, mime_type, size.map(|s| s as i64), chrono::Utc::now().timestamp()],
+            params![
+                media_url, 
+                local_path, 
+                mime_type, 
+                size.and_then(|s| i64::try_from(s).ok()), 
+                chrono::Utc::now().timestamp()
+            ],
         )?;
         Ok(())
     }
@@ -260,4 +368,21 @@ impl StorageManager {
         Ok(deleted)
     }
 
+    pub async fn delete_cached_chat(&mut self, chat_id: &str) -> Result<bool> {
+        let deleted = self.conn.execute(
+            "DELETE FROM chats_cache WHERE id = ?",
+            params![chat_id],
+        )?;
+
+        Ok(deleted > 0)
+    }
+
+    pub async fn delete_cached_message(&mut self, message_id: &str) -> Result<bool> {
+        let deleted = self.conn.execute(
+            "DELETE FROM messages_cache WHERE id = ?",
+            params![message_id],
+        )?;
+
+        Ok(deleted > 0)
+    }
 }
