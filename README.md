@@ -4,7 +4,7 @@ This is a early model of my messenger application built in two parts: Server end
 A cross-platform messaging application with a Go backend server and a Rust GUI client.  
 The project aims to provide a fast, lightweight, and modern messaging platform.  
 
-**Note:** The Rust client is under development and does not compile yet.
+**Note:** The Rust client is under development and does not compile yet. Uses Rust 2024 edition.
 
 ## Features (planned)
 
@@ -17,7 +17,7 @@ The project aims to provide a fast, lightweight, and modern messaging platform.
 ## Architecture
 
 - **Server (Go):** Handles message routing, storage, and network communication  
-- **Client (Rust):** GUI, client-side logic, and async networking (work in progress)  
+- **Client (Rust, 2024 edition):** GUI, client-side logic, and async networking (work in progress)  
 - **Frontend GUI (Rust + egui):** Lightweight and responsive interface (work in progress)
 
 ## Getting Started
@@ -25,5 +25,5 @@ The project aims to provide a fast, lightweight, and modern messaging platform.
 ### Prerequisites
 
 - Go (latest stable)
-- Rust (latest stable, with Cargo)
+- Rust 2024 edition (with Cargo)
 - Dependencies specified in `Cargo.toml` (e.g., `tokio`, `egui`)
