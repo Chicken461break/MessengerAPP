@@ -1,3 +1,6 @@
+# Planning to switch to Flutter UI. main.rs, ui.rs and all files in the UI folder are going to be redundant
+
+
 # MessengerAPP
 This is a early model of my messenger application built in two parts: Server end and user end. 
 
